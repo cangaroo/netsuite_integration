@@ -1,15 +1,10 @@
 source 'https://www.rubygems.org'
 
-gem 'sinatra'
-gem 'tilt', '~> 1.4.1'
-gem 'tilt-jbuilder', require: 'sinatra/jbuilder'
+ruby '2.3.1'
 
-gem 'jbuilder', '2.0.6'
-gem 'endpoint_base', github: 'spree/endpoint_base'
+gemspec
 
-gem 'netsuite', github: 'wombat/netsuite', branch: 'fix-customer-field-refs'
-gem 'honeybadger'
-gem 'airbrake'
+gem 'endpoint_base', git: 'https://github.com/Follain/endpoint_base'
 
 group :development do
   gem 'rake'
@@ -19,16 +14,10 @@ end
 
 group :test do
   gem 'vcr'
-  gem 'rspec', '~> 2.14'
   gem 'rack-test'
   gem 'webmock'
 end
 
 group :test, :development do
   gem 'pry-byebug'
-end
-
-group :production do
-  gem 'foreman'
-  gem 'unicorn'
 end
