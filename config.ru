@@ -2,5 +2,5 @@ require 'rubygems'
 require 'bundler'
 
 Bundler.require(:default)
-require "./netsuite_endpoint"
+require "./lib/netsuite_endpoint"
 run NetsuiteEndpoint
