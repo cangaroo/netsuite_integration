@@ -54,7 +54,6 @@ class NetsuiteEndpoint < EndpointBase::Sinatra::Base
         consumer_secret config.fetch('netsuite_consumer_secret')
         token_id config.fetch('netsuite_token_id')
         token_secret config.fetch('netsuite_token_secret')
-        wsdl_domain  ENV['NETSUITE_WSDL_DOMAIN'] || 'webservices.na1.netsuite.com'
 
         read_timeout 240
         log_level    :info
