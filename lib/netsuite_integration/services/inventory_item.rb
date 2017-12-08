@@ -26,7 +26,7 @@ module NetsuiteIntegration
         valid_items.sort_by { |c| c.last_modified_date.utc }
       end
 
-      def find_by_name(name)
+      def find_by_item_name(name)
         NetSuite::Records::InventoryItem.search({
           criteria: {
             basic: [{
@@ -41,7 +41,7 @@ module NetsuiteIntegration
       def find_by_item_id(item_id)
         NetSuite::Records::InventoryItem.search({
           criteria: {
-            basic: basic_criteria + [{ field: 'itemId', value: item_id, operator: 'is' }]
+            basic: basic_criteria_all + [{ field: 'itemId', value: item_id, operator: 'is' }]
           },
           preferences: default_preferences
         }).results.first
@@ -103,6 +103,17 @@ module NetsuiteIntegration
             {
               field: 'isInactive',
               value: false
+            }
+          ]
+        end
+
+         def basic_criteria_all
+          [
+            {
+              field: 'type',
+              operator: 'anyOf',
+              type: 'SearchEnumMultiSelectField',
+              value: item_type_to_fetch
             }
           ]
         end
