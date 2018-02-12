@@ -1,22 +1,11 @@
 require "sinatra"
 require "endpoint_base"
 
-require File.expand_path(File.dirname(__FILE__) + '/lib/netsuite_integration')
+require File.expand_path(File.dirname(__FILE__) + '/netsuite_integration')
 
 class NetsuiteEndpoint < EndpointBase::Sinatra::Base
-  Honeybadger.configure do |config|
-    config.api_key = ENV['HONEYBADGER_KEY']
-    config.environment_name = ENV['RACK_ENV']
-  end if ENV['HONEYBADGER_KEY'].present?
-
-  Airbrake.configure do |config|
-    config.api_key = ENV['AIRBRAKE_API']
-    config.host    = ENV['AIRBRAKE_HOST'] if ENV['AIRBRAKE_HOST'].present?
-    config.port    = ENV['AIRBRAKE_PORT'] if ENV['AIRBRAKE_PORT'].present?
-    config.secure  = config.port == 443
-  end if ENV['AIRBRAKE_API'].present?
-
   set :logging, true
+  # suppress netsuite warnings
   set :show_exceptions, false
 
   error Errno::ENOENT, NetSuite::RecordNotFound, NetsuiteIntegration::NonInventoryItemException do
@@ -28,6 +17,8 @@ class NetsuiteEndpoint < EndpointBase::Sinatra::Base
   end
 
   before do
+    @config['netsuite_last_updated_after'] ||= Time.at(@payload["last_poll"].to_i).to_s if @payload.present?
+
     if config = @config
       # https://github.com/wombat/netsuite_integration/pull/27
       # Set connection/flow parameters with environment variables if they aren't already set from the request
@@ -58,31 +49,45 @@ class NetsuiteEndpoint < EndpointBase::Sinatra::Base
 
         sandbox config['netsuite_sandbox'].to_s == "true" || config['netsuite_sandbox'].to_s == "1"
 
-        email        config.fetch('netsuite_email')
-        password     config.fetch('netsuite_password')
         account      config.fetch('netsuite_account')
-        read_timeout 175
+        consumer_key config.fetch('netsuite_consumer_key')
+        consumer_secret config.fetch('netsuite_consumer_secret')
+        token_id config.fetch('netsuite_token_id')
+        token_secret config.fetch('netsuite_token_secret')
+        wsdl_domain  ENV['NETSUITE_WSDL_DOMAIN'] || 'webservices.na1.netsuite.com'
+
+        read_timeout 240
         log_level    :info
       end
     end
   end
 
-  post '/get_products' do
-    products = NetsuiteIntegration::Product.new(@config)
+  def self.fetch_endpoint(path, service_class, key)
+    post path do
+      service = service_class.new(@config)
 
-    if products.collection.any?
-      products.messages.each do |message|
-        add_object "product", message
+      service.messages.each do |message|
+        add_object key, message
       end
 
-      add_parameter 'netsuite_last_updated_after', products.last_modified_date
+      if service.collection.any?
+        add_parameter 'netsuite_last_updated_after', service.last_modified_date
+      else
+        add_parameter 'netsuite_last_updated_after', @config['netsuite_last_updated_after']
+        add_value key.pluralize, []
+      end
 
-      count = products.messages.count
-      @summary = "#{count} #{"item".pluralize count} found in NetSuite"
+      count = service.messages.count
+      @summary = "#{count} #{key.pluralize count} found in NetSuite"
+
+      result 200, @summary
     end
-
-    result 200, @summary
   end
+
+  fetch_endpoint '/get_products', NetsuiteIntegration::Product, "product"
+  fetch_endpoint '/get_purchase_orders', NetsuiteIntegration::PurchaseOrder, "purchase_order"
+  fetch_endpoint '/get_transfer_orders', NetsuiteIntegration::TransferOrder, "transfer_order"
+  fetch_endpoint '/get_vendors', NetsuiteIntegration::Vendor, "vendor"
 
   ['/add_order', '/update_order'].each do |path|
     post path do
@@ -113,6 +118,42 @@ class NetsuiteEndpoint < EndpointBase::Sinatra::Base
       result 500, "NetSuite Sales Order not found for order #{@payload[:order][:number] || @payload[:order][:id]}"
     end
   end
+
+  post '/add_inventory_adjustment' do
+
+    receipt = NetsuiteIntegration::InventoryAdjustment.new(@config, @payload)
+    summary = "Netsuite Inventory Adjustment Created "
+    result 200, summary
+  end
+
+  post '/add_purchase_order_receipt' do
+
+    receipt = NetsuiteIntegration::PurchaseOrderReceipt.new(@config, @payload)
+    summary = "Netsuite Receipt Created "
+    result 200, summary
+  end
+
+  post '/add_transfer_order_receipt' do
+
+    receipt = NetsuiteIntegration::TransferOrderReceipt.new(@config, @payload)
+    summary = "Netsuite Receipt Created "
+    result 200, summary
+  end
+
+  post '/maintain_inventory_item' do
+
+    receipt = NetsuiteIntegration::MaintainInventoryItem.new(@config, @payload)
+    summary = "Netsuite Item Created/Updated "
+    result 200, summary
+  end
+
+  post '/add_gl_journal' do
+
+    receipt = NetsuiteIntegration::GlJournal.new(@config, @payload)
+    summary = "Netsuite GL Journal Created "
+    result 200, summary
+  end
+
 
   post '/get_inventory' do
     begin
